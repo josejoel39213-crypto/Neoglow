@@ -1,5 +1,5 @@
 # ============================================================
-# NEOGLOW COMPLETE REAL-TIME MONITORING SYSTEM
+# NEOGLOW ONLINE DEPLOYMENT VERSION
 # ============================================================
 
 import streamlit as st
@@ -7,10 +7,11 @@ import cv2
 import numpy as np
 import pandas as pd
 import tensorflow as tf
-import time
 import os
+import time
 
 from tensorflow.keras.models import load_model
+from PIL import Image
 import matplotlib.pyplot as plt
 
 # ============================================================
@@ -18,7 +19,7 @@ import matplotlib.pyplot as plt
 # ============================================================
 
 st.set_page_config(
-    page_title="NeoGlow Monitoring",
+    page_title="NeoGlow AI Monitor",
     page_icon="🩺",
     layout="wide"
 )
@@ -27,10 +28,12 @@ st.set_page_config(
 # TITLE
 # ============================================================
 
-st.title("🩺 NeoGlow Real-Time Monitoring System")
+st.title("🩺 NeoGlow AI Neonatal Jaundice Monitoring")
 
 st.write(
-    "Real-time neonatal bilirubin monitoring using webcam and AI"
+    """
+AI-based neonatal bilirubin estimation and jaundice monitoring system.
+"""
 )
 
 # ============================================================
@@ -66,7 +69,7 @@ def load_neoglow_model():
 model = load_neoglow_model()
 
 # ============================================================
-# PATIENT INFO
+# PATIENT INFORMATION
 # ============================================================
 
 st.sidebar.title("Patient Information")
@@ -84,7 +87,7 @@ if patient_id == "":
     patient_id = f"P{int(time.time())}"
 
     st.sidebar.info(
-        f"Generated ID: {patient_id}"
+        f"Generated Patient ID: {patient_id}"
     )
 
 # ============================================================
@@ -222,7 +225,7 @@ def preprocess_frame(frame):
     return rgb,hsv,lab
 
 # ============================================================
-# PREDICTION FUNCTION
+# PREDICTION
 # ============================================================
 
 def predict_image(frame):
@@ -248,41 +251,47 @@ def predict_image(frame):
     return bilirubin,probability,prediction
 
 # ============================================================
-# SAVE RESULTS
+# SAVE RESULT
 # ============================================================
 
 def save_result(
     patient_id,
     patient_name,
-    time_stamp,
     bilirubin,
     probability,
     prediction,
     image_path
 ):
 
+    timestamp = time.strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
     row = {
 
-        'Patient_ID': patient_id,
+        "Patient_ID": patient_id,
 
-        'Patient_Name': patient_name,
+        "Patient_Name": patient_name,
 
-        'Time': time_stamp,
+        "Timestamp": timestamp,
 
-        'Bilirubin': bilirubin,
+        "Bilirubin": bilirubin,
 
-        'Probability': probability,
+        "Probability": probability,
 
-        'Prediction': prediction,
+        "Prediction": prediction,
 
-        'Image_Path': image_path
+        "Image_Path": image_path
     }
 
     df = pd.DataFrame([row])
 
     if not os.path.exists(CSV_FILE):
 
-        df.to_csv(CSV_FILE,index=False)
+        df.to_csv(
+            CSV_FILE,
+            index=False
+        )
 
     else:
 
@@ -294,7 +303,7 @@ def save_result(
         )
 
 # ============================================================
-# IMAGE UPLOAD SECTION
+# IMAGE UPLOAD
 # ============================================================
 
 st.markdown("---")
@@ -302,7 +311,7 @@ st.markdown("---")
 st.subheader("📁 Upload Neonatal Image")
 
 uploaded_file = st.file_uploader(
-    "Upload Image",
+    "Upload Neonatal Image",
     type=["jpg","jpeg","png"]
 )
 
@@ -324,7 +333,7 @@ if uploaded_file is not None:
         caption='Uploaded Image'
     )
 
-    if st.button("Run AI on Uploaded Image"):
+    if st.button("Run AI Analysis"):
 
         bilirubin,probability,prediction = predict_image(frame)
 
@@ -352,69 +361,87 @@ if uploaded_file is not None:
                 f"Prediction: {prediction}"
             )
 
+        image_name = f"{patient_id}_{int(time.time())}.jpg"
+
+        image_path = os.path.join(
+            IMAGE_FOLDER,
+            image_name
+        )
+
+        cv2.imwrite(
+            image_path,
+            frame
+        )
+
+        save_result(
+            patient_id,
+            patient_name,
+            bilirubin,
+            probability,
+            prediction,
+            image_path
+        )
+
+        st.success(
+            "Patient data saved successfully"
+        )
+
 # ============================================================
-# REAL-TIME WEBCAM MONITORING
+# CAMERA INPUT
 # ============================================================
 
 st.markdown("---")
 
-st.subheader("📷 Real-Time Webcam Monitoring")
+st.subheader("📷 Capture Using Camera")
 
-run_system = st.checkbox(
-    "Start Real-Time Monitoring"
+camera_image = st.camera_input(
+    "Take Neonatal Image"
 )
 
-monitor_interval = st.slider(
-    "Monitoring Interval (Seconds)",
-    10,
-    60,
-    20
-)
+if camera_image is not None:
 
-FRAME_WINDOW = st.image([])
+    image = Image.open(camera_image)
 
-status_box = st.empty()
+    frame = np.array(image)
 
-chart_placeholder = st.empty()
+    frame = cv2.cvtColor(
+        frame,
+        cv2.COLOR_RGB2BGR
+    )
 
-table_placeholder = st.empty()
+    st.image(
+        frame,
+        channels='BGR',
+        caption='Captured Image'
+    )
 
-# ============================================================
-# CAMERA
-# ============================================================
-
-camera = cv2.VideoCapture(0)
-
-# ============================================================
-# REAL-TIME LOOP
-# ============================================================
-
-if run_system:
-
-    while True:
-
-        success, frame = camera.read()
-
-        if not success:
-
-            st.error("Camera Error")
-
-            break
-
-        FRAME_WINDOW.image(
-            frame,
-            channels='BGR'
-        )
+    if st.button("Run AI on Captured Image"):
 
         bilirubin,probability,prediction = predict_image(frame)
 
-        current_time = time.strftime(
-            "%H:%M:%S"
+        st.success("Analysis Complete")
+
+        st.metric(
+            "Predicted Bilirubin",
+            f"{bilirubin:.2f} mg/dL"
         )
 
-        # ====================================================
-        # SAVE IMAGE
-        # ====================================================
+        st.metric(
+            "Jaundice Probability",
+            f"{probability:.4f}"
+        )
+
+        if prediction == "JAUNDICE":
+
+            st.error(
+                f"Prediction: {prediction}"
+            )
+
+        else:
+
+            st.success(
+                f"Prediction: {prediction}"
+            )
 
         image_name = f"{patient_id}_{int(time.time())}.jpg"
 
@@ -428,144 +455,26 @@ if run_system:
             frame
         )
 
-        # ====================================================
-        # SAVE RESULTS
-        # ====================================================
-
         save_result(
             patient_id,
             patient_name,
-            current_time,
             bilirubin,
             probability,
             prediction,
             image_path
         )
 
-        # ====================================================
-        # SHOW STATUS
-        # ====================================================
+        st.success(
+            "Patient data saved successfully"
+        )
 
-        if prediction == "JAUNDICE":
-
-            status_box.error(
-                f"""
-Patient ID : {patient_id}
-
-Patient Name : {patient_name}
-
-Bilirubin : {bilirubin:.2f} mg/dL
-
-Probability : {probability:.3f}
-
-Status : {prediction}
-"""
-            )
-
-        else:
-
-            status_box.success(
-                f"""
-Patient ID : {patient_id}
-
-Patient Name : {patient_name}
-
-Bilirubin : {bilirubin:.2f} mg/dL
-
-Probability : {probability:.3f}
-
-Status : {prediction}
-"""
-            )
-
-        # ====================================================
-        # LOAD CSV + DASHBOARD
-        # ====================================================
-
-        if os.path.exists(CSV_FILE):
-
-            df = pd.read_csv(CSV_FILE)
-
-            # ================================================
-            # FILTER PATIENT
-            # ================================================
-
-            df = df[
-                df['Patient_ID'] == patient_id
-            ]
-
-            # ================================================
-            # TABLE
-            # ================================================
-
-            table_placeholder.dataframe(df)
-
-            # ================================================
-            # IMPROVEMENT STATUS
-            # ================================================
-
-            if len(df) >= 2:
-
-                latest = df.iloc[-1]['Bilirubin']
-
-                previous = df.iloc[-2]['Bilirubin']
-
-                if latest < previous:
-
-                    st.success(
-                        "📉 Improvement Detected"
-                    )
-
-                elif latest > previous:
-
-                    st.error(
-                        "📈 Bilirubin Increasing"
-                    )
-
-                else:
-
-                    st.info(
-                        "➖ Stable Bilirubin"
-                    )
-
-            # ================================================
-            # GRAPH
-            # ================================================
-
-            fig, ax = plt.subplots(figsize=(10,4))
-
-            ax.plot(
-                df['Bilirubin'],
-                marker='o'
-            )
-
-            ax.set_title(
-                f'{patient_name} Bilirubin Monitoring Trend'
-            )
-
-            ax.set_ylabel(
-                'Bilirubin (mg/dL)'
-            )
-
-            ax.set_xlabel(
-                'Reading Number'
-            )
-
-            chart_placeholder.pyplot(fig)
-
-           
-        # ====================================================
-        # WAIT
-        # ====================================================
-
-        time.sleep(monitor_interval)
 # ============================================================
-# DELETE RECORDS SECTION
+# DASHBOARD
 # ============================================================
 
 st.markdown("---")
 
-st.subheader("🗑 Delete Records")
+st.subheader("📊 Patient Monitoring Dashboard")
 
 if os.path.exists(CSV_FILE):
 
@@ -575,55 +484,118 @@ if os.path.exists(CSV_FILE):
         full_df['Patient_ID'] == patient_id
     ]
 
-    for i,row in patient_df.iterrows():
+    if len(patient_df) > 0:
 
-        unique_key = f"{row['Patient_ID']}_{row['Time']}_{i}"
+        st.dataframe(patient_df)
 
-        col1, col2 = st.columns([5,1])
+        # ====================================================
+        # IMPROVEMENT DETECTION
+        # ====================================================
 
-        with col1:
+        if len(patient_df) >= 2:
 
-            st.write(
-                f"""
-Time: {row['Time']} | 
-Bilirubin: {row['Bilirubin']:.2f} | 
-Prediction: {row['Prediction']}
-"""
-            )
+            latest = patient_df.iloc[-1]['Bilirubin']
 
-        with col2:
+            previous = patient_df.iloc[-2]['Bilirubin']
 
-            if st.button(
-                "❌",
-                key=unique_key
-            ):
+            if latest < previous:
 
-                # ========================================
-                # DELETE IMAGE
-                # ========================================
+                st.success(
+                    "📉 Improvement Detected"
+                )
+
+            elif latest > previous:
+
+                st.error(
+                    "📈 Bilirubin Increasing"
+                )
+
+            else:
+
+                st.info(
+                    "➖ Stable Bilirubin"
+                )
+
+        # ====================================================
+        # GRAPH
+        # ====================================================
+
+        fig, ax = plt.subplots(figsize=(10,4))
+
+        ax.plot(
+            patient_df['Bilirubin'],
+            marker='o'
+        )
+
+        ax.set_title(
+            f'{patient_name} Bilirubin Trend'
+        )
+
+        ax.set_ylabel(
+            'Bilirubin (mg/dL)'
+        )
+
+        ax.set_xlabel(
+            'Reading Number'
+        )
+
+        st.pyplot(fig)
+
+        # ====================================================
+        # STORED IMAGES
+        # ====================================================
+
+        st.subheader("🖼 Stored Images")
+
+        for i,row in patient_df.iterrows():
+
+            col1, col2 = st.columns([5,1])
+
+            with col1:
 
                 if os.path.exists(row['Image_Path']):
 
-                    os.remove(
-                        row['Image_Path']
+                    st.image(
+                        row['Image_Path'],
+                        width=250,
+                        caption=f"{row['Timestamp']} | Bilirubin: {row['Bilirubin']:.2f}"
                     )
 
-                # ========================================
-                # DELETE CSV ROW
-                # ========================================
+            with col2:
 
-                full_df = full_df.drop(i)
+                unique_key = f"{row['Patient_ID']}_{row['Timestamp']}_{i}"
 
-                full_df.to_csv(
-                    CSV_FILE,
-                    index=False
-                )
+                if st.button(
+                    "❌",
+                    key=unique_key
+                ):
 
-                st.success(
-                    "Record Deleted"
-                )
+                    # ========================================
+                    # DELETE IMAGE
+                    # ========================================
 
-                st.rerun()
+                    if os.path.exists(row['Image_Path']):
+
+                        os.remove(
+                            row['Image_Path']
+                        )
+
+                    # ========================================
+                    # DELETE CSV ROW
+                    # ========================================
+
+                    full_df = full_df.drop(i)
+
+                    full_df.to_csv(
+                        CSV_FILE,
+                        index=False
+                    )
+
+                    st.success(
+                        "Record Deleted"
+                    )
+
+                    st.rerun()
 
 # ============================================================
 # FOOTER
